@@ -1,0 +1,43 @@
+<html>
+	<head>
+		<title>Node Graph</title>
+		<script type="text/javascript" src="./src/svg.min.js"></script>
+		<script type="text/javascript" src="./src/nodeGraph.js"></script>
+	</head>
+	<body>
+
+		<div id="graph_example"></div>
+
+		<script type="text/javascript">
+			var graphStyle = new nodeGraph.Style();
+				graphStyle.set( { });
+ 
+			var graph = new nodeGraph.Graph();
+				graph.setRender( new nodeGraph.SVGRenderer("graph_example") );
+				graph.addAnimation("hoverAnimation");
+
+				graph.style = graphStyle;
+
+				graph.fromJSON({
+					width: 700,
+					height: 400,
+
+					nodes: [
+						{x: 100, y: 50},
+						{x: 240, y: 120},
+						{x: 140, y: 180},
+						{x: 220, y: 240}
+					],
+
+					edges: [
+						{n1: 0, n2: 1},
+						{n1: 1, n2: 2},
+						{n1: 2, n2: 0},
+						{n1: 3, n2: 2},
+						{n1: 3, n2: 1}
+					]
+				});
+				graph.render();
+		</script>
+	</body>
+</html>
