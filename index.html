@@ -7,14 +7,54 @@
 	<body>
 
 		<div id="graph_example"></div>
+		<div id="graph_example2"></div>
 
 		<script type="text/javascript">
 			var graphStyle = new nodeGraph.Style();
-				graphStyle.set( { });
- 
+
 			var graph = new nodeGraph.Graph();
 				graph.setRender( new nodeGraph.SVGRenderer("graph_example") );
+
 				graph.addAnimation("hoverAnimation");
+				graph.enableStretchPhysics();
+
+				graph.style = graphStyle;
+
+				graph.fromJSON({
+					width: 1000,
+					height: 400,
+
+					nodes: [
+						{x: 100, y: 50},
+						{x: 240, y: 120},
+						{x: 140, y: 180},
+						{x: 220, y: 240},
+						{x: 115, y: 320}
+					],
+
+					edges: [
+						{n1: 0, n2: 1},
+						{n1: 1, n2: 2},
+						{n1: 2, n2: 0},
+						{n1: 3, n2: 2},
+						{n1: 3, n2: 1},
+						{n1: 3, n2: 4},
+						{n1: 2, n2: 4}
+					]
+				});
+
+				graph.render();
+
+
+			var graph = new nodeGraph.Graph();
+				graph.setRender( new nodeGraph.SVGRenderer("graph_example2") );
+
+				//graph.addAnimation("hoverAnimation");
+				graph.enableStretchPhysics();
+				
+				graph.stretchPhysics.edgeStretchForce = 1;
+				graph.stretchPhysics.originalPositionForce = 0.2;
+ 				graph.stretchPhysics.dragForce = 0.1;
 
 				graph.style = graphStyle;
 
@@ -25,18 +65,16 @@
 					nodes: [
 						{x: 100, y: 50},
 						{x: 240, y: 120},
-						{x: 140, y: 180},
-						{x: 220, y: 240}
+						{x: 140, y: 180}
 					],
 
 					edges: [
 						{n1: 0, n2: 1},
 						{n1: 1, n2: 2},
-						{n1: 2, n2: 0},
-						{n1: 3, n2: 2},
-						{n1: 3, n2: 1}
+						{n1: 2, n2: 0}
 					]
 				});
+
 				graph.render();
 		</script>
 	</body>

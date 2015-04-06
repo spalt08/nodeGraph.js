@@ -18,14 +18,15 @@ nodeGraph.Style = function() {
 
 	this.options = {
 		nodeRadius: 5,
-		nodeHoverRadius: 8,
-		nodeHoverDistance: 20,
+		nodeHoverRadius: 10,
+		nodeHoverDistance: 50,
+		nodeHoverPhysicsDistance: 100,
 		nodeHoverAnimationTime: 0.2,
-		nodeStrokeColor: "rgba(131, 202, 233, 0.4)",
-		nodeHoveredStrokeColor: "rgba(131, 202, 233, 0.7)",
-		nodeStrokeWidth: 2,
+		nodeStrokeColor: "rgba(131, 202, 233, 0.8)",
+		nodeHoveredStrokeColor: "rgba(131, 202, 233, 1)",
+		nodeStrokeWidth: 1,
 		nodeFillColor: "#ffffff",
-		edgeColor: "rgba(131, 202, 233, 0.2)",
+		edgeColor: "rgba(131, 202, 233, 0.5)",
 		edgeWidth: 1
 	};
 	this.property = function(name, value) { 
@@ -63,7 +64,10 @@ nodeGraph.Graph = function(elementID) {
 
 	this.addAnimation = function( name ){
 		this.animationsList.push(name);
+		this.startAnimation();
+	}
 
+	this.startAnimation = function(){
 		if(!this.animation) {
 			this.domElement = this.renderer.draw.parent;
 			this.cursor = new nodeGraph.Cursor(this);
@@ -71,6 +75,11 @@ nodeGraph.Graph = function(elementID) {
 			this.animation = new nodeGraph.Animation(this);
 		}
 	}
+
+	this.enableStretchPhysics = function() {
+		this.stretchPhysics = new nodeGraph.stretchPhysics();
+		this.startAnimation();
+	}	
 
 	this.size = function(w, h){
 		this.width = w;
@@ -111,6 +120,13 @@ nodeGraph.Graph = function(elementID) {
 			this.callbacks[name](parameter);
 	}
 
+	this.redraw = function() {
+		for(var i in this.nodes) 
+			this.nodes[i].redraw();
+		for(var i in this.edges) 
+			this.edges[i].redraw();
+	}
+
 	this.render = function() {
 		this.redraw();
 	}
@@ -123,12 +139,17 @@ nodeGraph.Vector = function(x, y) {
 	this.scale 	= function(scaleFactor) { this.x *= scaleFactor; this.y *= scaleFactor; }
 	this.plus 	= function(vector) { return new nodeGraph.Vector( this.x + vector.x, this.y + vector.y ); }
 	this.minus 	= function(vector) { return new nodeGraph.Vector( this.x - vector.x, this.y - vector.y ); }
+	this.add 	= function(vector) { this.x += vector.x; this.y += vector.y; }
 
 	this.distanceTo = function(vector) { 
 		var dx = this.x - vector.x;
 		var dy = this.y - vector.y;
 
 		return Math.sqrt(dx*dx + dy*dy);
+	}
+
+	this.length = function() {
+		return Math.sqrt(this.x*this.x + this.y*this.y);
 	}
 };
 
@@ -138,6 +159,7 @@ nodeGraph.Node = function(x, y, draw, style) {
 	this.radius = style.options.nodeRadius;
 	this.style = style;
 
+	this.isAttachedToCursor = false;
 	this.isHovered = false;
 
 	var set = draw.set();
@@ -150,6 +172,13 @@ nodeGraph.Node = function(x, y, draw, style) {
 
 	set.add(nodeElement);
 	set.center(this.position.x, this.position.y);
+
+	this.attachToCursor = function() {
+		this.isAttachedToCursor = true;
+	}
+	this.detachFromCursor = function() {
+		this.isAttachedToCursor = false;
+	}
 
 	this.redraw = function() {
 		set.center(this.position.x, this.position.y);
@@ -166,6 +195,7 @@ nodeGraph.Node = function(x, y, draw, style) {
 nodeGraph.Edge = function(node1, node2, draw, style) {
 	this.node1 = node1;
 	this.node2 = node2;
+	this.originalLength = this.node1.original.distanceTo(this.node2.original);
 
 	var edgeElement = draw.line(this.node1.position.x, this.node1.position.y, this.node2.position.x, this.node2.position.y);
 		edgeElement.stroke({ width: style.options.edgeWidth, color: style.options.edgeColor });
@@ -178,6 +208,10 @@ nodeGraph.Edge = function(node1, node2, draw, style) {
 			y2: this.node2.position.y
 		});
 	}
+
+	this.length = function() {
+    	return this.node1.position.distanceTo(this.node2.position);
+  	};
 }
 
 nodeGraph.Cursor = function(graph){
@@ -200,9 +234,12 @@ nodeGraph.Cursor = function(graph){
 
 	this.element.addEventListener("mouseenter", function(event) {
 		self.graph.callback("graphMouseEnter");
+		self.mousePresent = true;
 	}); 
 	this.element.addEventListener("mouseleave", function(event) {
 		self.graph.callback("graphMouseLeave");
+		self.mousePresent = false;
+		self.mouseDown = false;
 	}); 
 	this.element.addEventListener("mousedown", function(event) {
 		self.mouseDown = true;
@@ -254,8 +291,8 @@ nodeGraph.Timer = function(graph) {
 	}
 
 	this.stop = function() {
-		isRunning = false;
-		clearTimeout(timerID);
+		//isRunning = false;
+		//clearTimeout(timerID);
 	}
 
 	if(this.autoStart)
@@ -266,41 +303,105 @@ nodeGraph.Animation = function(graph) {
 	this.graph = graph;
 
 	this.defaultAnimations = {
-		hoverAnimation: function(graph) {
-			for(var i in graph.nodes) {
-				var cursor = graph.cursor;
-				var node = graph.nodes[i];
+		hoverAnimation: function(node, cursor, distance, graph) {
+			if(distance < node.style.options.nodeHoverDistance){ 
+				if(node.radius < node.style.options.nodeHoverRadius) {
+					node.radius += (node.style.options.nodeHoverRadius - node.style.options.nodeRadius) / (graph.timer.fps * node.style.options.nodeHoverAnimationTime);
+					node.isHovered = true;
 
-				var distance = node.position.distanceTo(cursor.position);
+					graph.callback("nodeMouseOver", node);
+				}
+			} else { 
+				if(node.radius > node.style.options.nodeRadius) {
+					node.radius -= (node.style.options.nodeHoverRadius - node.style.options.nodeRadius) / (graph.timer.fps * node.style.options.nodeHoverAnimationTime);
+					node.isHovered = false; 
 
-				if(distance < node.style.options.nodeHoverDistance){ 
-					if(node.radius < node.style.options.nodeHoverRadius) {
-						node.radius += (node.style.options.nodeHoverRadius - node.style.options.nodeRadius) / (graph.timer.fps * node.style.options.nodeHoverAnimationTime);
-						node.isHovered = true;
-						node.redraw();
-
-						graph.callback("nodeMouseOver", node);
-					}
-				} else { 
-					if(node.radius > node.style.options.nodeRadius) {
-						node.radius -= (node.style.options.nodeHoverRadius - node.style.options.nodeRadius) / (graph.timer.fps * node.style.options.nodeHoverAnimationTime);
-						node.isHovered = false; 
-						node.redraw();
-
-						graph.callback("nodeMouseOut", node);
-					}
+					graph.callback("nodeMouseOut", node);
 				}
 			}
 		}
 	};
 
 	this.tween = function() {
-		for(var i in this.graph.animationsList) {
-			var animationName = this.graph.animationsList[i];
-			if(this.defaultAnimations[animationName])
-				this.defaultAnimations[animationName](this.graph);
+		for(var i in graph.nodes) {
+			var cursor = graph.cursor;
+			var node = graph.nodes[i];
+			var distance = node.position.distanceTo(cursor.position);
+
+			for(var i in this.graph.animationsList) {
+				var animationName = this.graph.animationsList[i];
+				if(this.defaultAnimations[animationName])
+					this.defaultAnimations[animationName](node, cursor, distance, graph);
+			}
+
+			if(graph.stretchPhysics) {
+				graph.stretchPhysics.applyCursorForce(node, cursor, distance);
+				graph.stretchPhysics.applyOriginalForce(node);
+			}
+		}
+		
+		for(var i in graph.edges) {
+			var edge = graph.edges[i];
+	        
+			if(graph.stretchPhysics) {
+				graph.stretchPhysics.applyEdgeStretchForce(edge);
+			}
 		}
 
+		this.graph.redraw();
+	}
+}
+
+nodeGraph.stretchPhysics = function() {
+	var self = this;
+
+	this.hoverForce = 0.02;
+	this.originalPositionForce = 0.1;
+	this.edgeStretchForce = 0.2;
+ 	this.dragForce = 0.4;
+
+	this.applyCursorForce = function(node, cursor, distance) {
+		if(cursor.mousePresent){
+		    var differnce = cursor.position.minus(node.position);
+
+			if(cursor.mouseDown) {
+				if(node.isAttachedToCursor) {
+					differnce.scale(this.dragForce);
+          			node.position.add(differnce);
+				} else if(distance < node.style.options.nodeHoverPhysicsDistance) {
+		          	differnce.scale(self.hoverForce);
+		          	node.position.add(differnce);
+		        }
+			} else {
+				if(distance < node.style.options.nodeHoverDistance) {
+					node.attachToCursor();
+				} else {
+					node.detachFromCursor();
+				}
+
+		        if(distance < node.style.options.nodeHoverPhysicsDistance) {
+		          	differnce.scale(self.hoverForce);
+		          	node.position.add(differnce);
+		        }
+			}
+		}
+	}
+
+	this.applyOriginalForce = function(node) {
+		var differnce = node.original.minus(node.position);
+    	differnce.scale(this.originalPositionForce);
+   		node.position.add(differnce);	
+	}
+
+	this.applyEdgeStretchForce = function(edge) {
+		var force = edge.node1.position.minus(edge.node2.position);
+	    var length = edge.length();
+	    var stretch = length - edge.originalLength;
+	 
+	    force.scale( this.edgeStretchForce * stretch / length);
+	    edge.node2.position.add(force);
+	    force.scale(-1);
+	    edge.node1.position.add(force);
 	}
 }
 
